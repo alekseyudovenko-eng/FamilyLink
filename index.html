@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Business Video Call (Unlimited)</title>
+    <title>LiveKit Video Call</title>
     <link rel="icon" href="data:;base64,iVBORw0KGgo=">
-    <!-- Подключаем LiveKit SDK -->
+    <!-- Подключаем клиент LiveKit -->
     <script src="https://cdn.jsdelivr.net/npm/livekit-client@1.15.0/dist/livekit-client.umd.min.js"></script>
     <style>
         :root {
@@ -34,32 +34,23 @@
             background: #000;
         }
 
-        /* Видео контейнеры */
-        .video-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            width: 100%;
-            height: 100%;
-        }
-
-        .video-wrapper {
-            position: relative;
+        /* Видео собеседника (Большое) */
+        .remote-video-wrapper {
             width: 100%;
             height: 100%;
             display: flex;
             align-items: center;
             justify-content: center;
-            background: #111;
         }
-
-        video {
+        
+        .remote-video-wrapper video {
             max-width: 100%;
             max-height: 100%;
             object-fit: contain;
         }
 
-        /* Ваше видео (PiP) */
-        .local-video-container {
+        /* Ваше видео (Малое, PiP) */
+        .local-video-wrapper {
             position: absolute;
             bottom: 20px;
             right: 20px;
@@ -70,13 +61,14 @@
             border: 2px solid rgba(255,255,255,0.2);
             z-index: 10;
             box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            overflow: hidden;
         }
 
-        .local-video-container video {
-            transform: scaleX(-1);
+        .local-video-wrapper video {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            transform: scaleX(-1); /* Зеркало */
         }
 
         .label {
@@ -88,6 +80,7 @@
             padding: 2px 6px;
             font-size: 10px;
             border-radius: 3px;
+            pointer-events: none;
         }
 
         /* Панель управления */
@@ -104,11 +97,7 @@
         .room-info {
             font-family: monospace;
             font-size: 14px;
-            background: #f0f0f0;
-            padding: 8px 12px;
-            border-radius: 4px;
-            border: 1px solid #ccc;
-            cursor: pointer;
+            color: #666;
         }
 
         .controls {
@@ -147,116 +136,71 @@
 <body>
 
     <div class="workspace">
-        <div class="status" id="status">Ожидание...</div>
+        <div class="status" id="status">Настройка...</div>
         
         <!-- Видео собеседника -->
-        <div class="video-wrapper" id="remoteVideoContainer">
+        <div class="remote-video-wrapper" id="remoteVideoContainer">
             <div style="color: #666;">Ожидание собеседника...</div>
         </div>
 
         <!-- Ваше видео -->
-        <div class="local-video-container">
+        <div class="local-video-wrapper">
             <video id="localVideo" autoplay muted playsinline></video>
             <div class="label">Вы</div>
         </div>
     </div>
 
     <div class="control-panel">
-        <div class="room-info" id="roomDisplay" title="Нажмите, чтобы скопировать ссылку">Комната: ...</div>
+        <div class="room-info" id="roomDisplay">Комната: не подключено</div>
         
         <div class="controls">
-            <button id="joinBtn" class="btn btn-primary">Подключиться</button>
-            <button id="leaveBtn" class="btn btn-danger" disabled>Отключиться</button>
+            <button id="connectBtn" class="btn btn-primary">Подключиться</button>
+            <button id="disconnectBtn" class="btn btn-danger" disabled>Отключиться</button>
         </div>
     </div>
 
     <script>
-        // --- НАСТРОЙКИ LIVEKIT (ВСТАВЬТЕ СВОИ ДАННЫЕ) ---
-        const LIVEKIT_URL = 'https://your-project-name.livekit.cloud'; // Вставьте ваш Project URL
-        const TOKEN_GENERATOR = 'dev'; // Для теста используем простой токен, но лучше генерировать на бэкенде
-        
-        // Внимание: Для продакшена токены нужно генерировать на сервере. 
-        // Для тестов мы используем клиентскую генерацию (небезопасно, но работает).
-        
         let room;
-        let localTrackPublication;
-
-        // Генерация имени комнаты
-        const roomName = 'biz-room-' + Math.random().toString(36).substring(2, 8);
-        document.getElementById('roomDisplay').innerText = "ID: " + roomName;
-
-        // Копирование ссылки
-        document.getElementById('roomDisplay').onclick = () => {
-            // Ссылка на этот же файл с параметром комнаты
-            const url = window.location.href.split('?')[0] + '?room=' + roomName;
-            navigator.clipboard.writeText(url).then(() => {
-                const el = document.getElementById('roomDisplay');
-                el.innerText = "Ссылка скопирована!";
-                setTimeout(() => el.innerText = "ID: " + roomName, 2000);
-            });
-        };
-
-        // Простая генерация токена (ТОЛЬКО ДЛЯ ТЕСТОВ!)
-        // В реальном проекте токен должен приходить с вашего бэкенда
-        async function generateToken(name, roomName) {
-            // Используем публичный сервис для генерации тестовых токенов LiveKit
-            // Или можно использовать локальную функцию, если подключить jwt-decode, но это сложно для одного файла.
-            // Для простоты в этом примере мы будем использовать "insecure" режим LiveKit Cloud для дев-тестов,
-            // либо вам нужно будет создать простой backend.
-            
-            // ВАЖНО: LiveKit Cloud требует валидный JWT. 
-            // Поскольку у нас нет бэкенда, я использую хак с публичным демо-сервером для примера,
-            // но лучше всего вам создать токен через CLI livekit-cli и вставить его сюда вручную для теста.
-            
-            // Для работы этого кода "из коробки" без бэкенда, нам нужно использовать сервис типа:
-            // https://livekit.io/docs/cloud/authentication
-            
-            // Чтобы код работал прямо сейчас, я использую временный токен-генератор (если он доступен)
-            // Или предлагаю вам ввести токен вручную.
-            
-            // ПОПРОБУЕМ ПОДКЛЮЧИТЬСЯ БЕЗ ТОКЕНА (НЕ РАБОТАЕТ В CLOUD)
-            // Поэтому я добавлю поле для ввода токена, если автоматика не сработает.
-            
-            return null; 
-        }
-
-        // Упрощенная версия: Используем публичный демо-кластер LiveKit для теста (может быть перегружен)
-        // Либо вы должны вставить свой токен.
-        
-        const joinBtn = document.getElementById('joinBtn');
-        const leaveBtn = document.getElementById('leaveBtn');
         const statusDiv = document.getElementById('status');
         const remoteContainer = document.getElementById('remoteVideoContainer');
+        const localVideoEl = document.getElementById('localVideo');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const roomDisplay = document.getElementById('roomDisplay');
 
-        joinBtn.onclick = async () => {
-            joinBtn.disabled = true;
+        // Имя комнаты (можно менять)
+        const ROOM_NAME = 'my-business-room'; 
+
+        connectBtn.onclick = async () => {
+            // 1. Запрашиваем данные у пользователя (так как нет бэкенда)
+            const url = prompt("Введите ваш LiveKit Project URL (например: wss://project-123.livekit.cloud):");
+            if (!url) return;
+
+            const token = prompt("Введите ваш Access Token (сгенерируйте в LiveKit Cloud Console):");
+            if (!token) return;
+
+            connectBtn.disabled = true;
             statusDiv.innerText = "Подключение...";
 
             try {
-                // 1. Получаем токен (Здесь заглушка, вам нужно получить реальный токен)
-                // Для теста вы можете сгенерировать токен здесь: https://livekit.io/docs/cloud/authentication
-                // И вставить его в переменную below.
-                
-                // ВНИМАНИЕ: Без валидного токена LiveKit Cloud не подключится.
-                // Я добавил поле prompt для ввода токена, если вы не настроили бэкенд.
-                let token = prompt("Введите Access Token из LiveKit Cloud Console (или сгенерируйте через CLI):", "");
-                
-                if (!token) {
-                    alert("Токен обязателен для LiveKit Cloud.");
-                    joinBtn.disabled = false;
-                    return;
-                }
-
-                // 2. Подключаемся
+                // 2. Создаем объект комнаты
                 room = new LivekitClient.Room();
-                
-                // Обработка треков
+
+                // 3. Обработка появления видео собеседника
                 room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+                    console.log("Track subscribed", track.kind);
                     if (track.kind === 'video' || track.kind === 'audio') {
+                        // Очищаем контейнер и добавляем новое видео
+                        remoteContainer.innerHTML = ''; 
                         const element = track.attach();
-                        remoteContainer.innerHTML = '';
+                        // Стилизация прикрепленного видео
+                        element.style.width = '100%';
+                        element.style.height = '100%';
+                        element.style.objectFit = 'contain';
                         remoteContainer.appendChild(element);
+                        
                         statusDiv.innerText = "Звонок идет";
+                        roomDisplay.innerText = "Комната: " + ROOM_NAME;
                     }
                 });
 
@@ -264,51 +208,47 @@
                     resetUI();
                 });
 
-                // 3. Публикуем свои треки
-                await room.prepareConnection(LIVEKIT_URL, token);
+                // 4. Подготовка и получение доступа к камере
+                await room.prepareConnection(url, token);
                 const localTracks = await LivekitClient.createLocalTracks({ audio: true, video: true });
                 
-                // Отображаем себя
+                // Отображаем себя локально
                 localTracks.forEach(track => {
                     if (track.kind === 'video') {
-                        const element = track.attach();
-                        document.getElementById('localVideo').srcObject = element.srcObject;
+                        // Livekit создает элемент, но мы хотим использовать наш #localVideo для дизайна
+                        // Поэтому просто берем поток
+                         localVideoEl.srcObject = track.mediaStream;
                     }
                 });
 
-                await room.connect(LIVEKIT_URL, token);
+                // 5. Подключение к комнате и публикация своих треков
+                await room.connect(url, token);
                 await room.localParticipant.publishTracks(localTracks);
 
-                leaveBtn.disabled = false;
-                statusDiv.innerText = "В комнате: " + roomName;
+                disconnectBtn.disabled = false;
+                statusDiv.innerText = "Подключено. Ждем собеседника...";
 
             } catch (err) {
                 console.error(err);
                 statusDiv.innerText = "Ошибка: " + err.message;
-                joinBtn.disabled = false;
-                alert("Ошибка подключения. Проверьте URL и Токен.");
+                connectBtn.disabled = false;
+                alert("Не удалось подключиться. Проверьте URL и Токен.");
             }
         };
 
-        leaveBtn.onclick = () => {
+        disconnectBtn.onclick = () => {
             if (room) {
                 room.disconnect();
             }
-            resetUI();
         };
 
         function resetUI() {
             remoteContainer.innerHTML = '<div style="color: #666;">Ожидание собеседника...</div>';
-            document.getElementById('localVideo').srcObject = null;
-            joinBtn.disabled = false;
-            leaveBtn.disabled = true;
+            localVideoEl.srcObject = null;
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
             statusDiv.innerText = "Отключено";
-        }
-
-        // Авто-подключение, если есть параметр в URL
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('room')) {
-            // Можно добавить логику авто-подключения
+            roomDisplay.innerText = "Комната: не подключено";
         }
     </script>
 </body>
