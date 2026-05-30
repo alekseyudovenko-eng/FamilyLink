@@ -3,11 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Business Video Call</title>
-    <!-- Иконка-заглушка -->
+    <title>Business Video Call (FFMUC)</title>
     <link rel="icon" href="data:;base64,iVBORw0KGgo=">
-    <!-- Подключаем API Jitsi Meet -->
-    <script src='https://meet.jit.si/external_api.js'></script>
+    <!-- Подключаем API Jitsi Meet (Сервер Мюнхен) -->
+    <script src='https://meet.ffmuc.net/external_api.js'></script>
     <style>
         :root {
             --bg-color: #f4f4f4;
@@ -28,7 +27,6 @@
             overflow: hidden;
         }
 
-        /* Основная область видео */
         .workspace {
             flex: 1;
             position: relative;
@@ -40,7 +38,6 @@
             height: 100%;
         }
 
-        /* Нижняя панель управления */
         .control-panel {
             height: 60px;
             background: var(--panel-bg);
@@ -61,7 +58,6 @@
             border: 1px solid #ccc;
             cursor: pointer;
             user-select: none;
-            transition: background 0.2s;
         }
 
         .room-info:hover {
@@ -81,16 +77,10 @@
             font-size: 14px;
             text-transform: uppercase;
             font-weight: 500;
-            transition: opacity 0.2s;
         }
 
-        .btn-danger { 
-            background: #dc3545; 
-            color: white; 
-        }
-        .btn-danger:hover { 
-            opacity: 0.8; 
-        }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-danger:hover { opacity: 0.8; }
 
         .status-msg {
             position: absolute;
@@ -108,16 +98,13 @@
             transition: opacity 0.5s;
         }
         
-        .visible {
-            opacity: 1;
-        }
+        .visible { opacity: 1; }
     </style>
 </head>
 <body>
 
     <div class="workspace">
         <div id="statusMsg" class="status-msg">Подключение...</div>
-        <!-- Сюда Jitsi вставит видеозвонок -->
         <div id="jitsi-container"></div>
     </div>
 
@@ -133,7 +120,6 @@
         let api = null;
         let roomName = '';
 
-        // Генерация уникального имени комнаты
         function generateRoomName() {
             return 'biz-' + Math.random().toString(36).substring(2, 10);
         }
@@ -142,7 +128,9 @@
             roomName = generateRoomName();
             document.getElementById('roomIdDisplay').innerText = "ID: " + roomName;
 
-            const domain = 'meet.jit.si';
+            // ИСПОЛЬЗУЕМ СЕРВЕР FFMUC (МЮНХЕН)
+            const domain = 'meet.ffmuc.net';
+            
             const options = {
                 roomName: roomName,
                 width: '100%',
@@ -152,14 +140,13 @@
                 configOverwrite: {
                     startWithAudioMuted: false,
                     startWithVideoMuted: false,
-                    prejoinPageEnabled: false, // Отключаем экран "Присоединиться", сразу входим
-                    disableDeepLinking: true,  // Не предлагать скачать приложение
-                    useStunTurn: true,         // Использовать TURN серверы Jitsi
+                    prejoinPageEnabled: false, // Сразу входим в звонок
+                    disableDeepLinking: true,
+                    useStunTurn: true,
                 },
                 interfaceConfigOverwrite: {
                     SHOW_JITSI_WATERMARK: false,
                     SHOW_WATERMARK_FOR_GUESTS: false,
-                    // Оставляем только нужные кнопки
                     TOOLBAR_BUTTONS: [
                         'microphone', 'camera', 'closedcaptions', 'desktop', 
                         'fullscreen', 'fodeviceselection', 'hangup', 'profile',
@@ -175,27 +162,22 @@
             try {
                 api = new JitsiMeetExternalAPI(domain, options);
 
-                // Обработка событий
                 api.addEventListeners({
                     videoConferenceJoined: () => {
                         showStatus("Звонок начался");
                     },
                     videoConferenceLeft: () => {
                         showStatus("Звонок завершен");
-                    },
-                    readyToClose: () => {
-                        // Можно добавить логику при закрытии
                     }
                 });
             } catch (e) {
-                console.error("Ошибка загрузки Jitsi:", e);
+                console.error(e);
                 showStatus("Ошибка загрузки сервиса");
             }
         }
 
-        // Копирование ссылки на звонок
         document.getElementById('roomIdDisplay').onclick = function() {
-            const link = "https://meet.jit.si/" + roomName;
+            const link = "https://meet.ffmuc.net/" + roomName;
             navigator.clipboard.writeText(link).then(() => {
                 const original = this.innerText;
                 this.innerText = "Ссылка скопирована!";
@@ -208,7 +190,6 @@
                 api.dispose();
                 api = null;
                 showStatus("Звонок завершен");
-                // Перезагрузка страницы для нового звонка
                 setTimeout(() => location.reload(), 1500);
             }
         }
@@ -222,7 +203,6 @@
             }, 3000);
         }
 
-        // Запуск при загрузке страницы
         window.onload = initJitsi;
     </script>
 </body>
