@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Business Video Call (RU Stable)</title>
+    <title>Business Video Call (Stable)</title>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <style>
         :root {
@@ -294,18 +294,14 @@
     </div>
 
     <script>
-        // --- КОНФИГУРАЦИЯ С TURN-СЕРВЕРОМ ДЛЯ РОССИИ ---
+        // --- КОНФИГУРАЦИЯ ---
         const peerConfig = {
             debug: 2,
             config: {
                 iceServers: [
-                    // STUN серверы (для определения IP)
                     { urls: 'stun:stun.l.google.com:19302' },
                     { urls: 'stun:stun1.l.google.com:19302' },
                     { urls: 'stun:stun.cloudflare.com:3478' },
-                    
-                    // TURN серверы (для пробития NAT через релей)
-                    // Используем публичный тестовый сервер Metered.ca
                     {
                         urls: 'turn:openrelay.metered.ca:80',
                         username: 'openrelayproject',
@@ -346,6 +342,7 @@
         let currentCall;
         let dataConnection;
         let isScreenSharing = false;
+        let isConnecting = false; // Флаг защиты от двойного клика
 
         async function startCamera() {
             try {
@@ -355,7 +352,9 @@
                 });
                 localStream = stream;
                 localVideo.srcObject = stream;
-                statusDiv.innerText = "Готов к подключению (TURN активен)";
+                // Убираем ошибку play() при инициализации
+                localVideo.play().catch(e => console.log("Autoplay prevented", e));
+                statusDiv.innerText = "Готов к подключению";
             } catch (err) {
                 console.error(err);
                 statusDiv.innerText = "Ошибка камеры";
@@ -369,27 +368,51 @@
             console.log('My peer ID is: ' + id);
         });
 
+        // Обработка входящего звонка
         peer.on('call', call => {
+            // Если уже есть активный звонок, игнорируем или завершаем новый
+            if (currentCall) {
+                call.close();
+                return;
+            }
             if (confirm("Входящий звонок. Принять?")) {
                 call.answer(localStream);
                 handleCall(call);
+            } else {
+                call.close();
             }
         });
 
+        // Обработка входящего чата
         peer.on('connection', conn => {
+            // Если соединение уже есть, игнорируем дубли
+            if (dataConnection && dataConnection.open) {
+                conn.close();
+                return;
+            }
             setupDataConnection(conn);
         });
 
         callBtn.onclick = () => {
+            if (isConnecting) return; // Защита от двойного клика
+            
             const remoteId = remoteIdInput.value.trim();
             if (!remoteId) return alert("Введите ID собеседника");
             
-            statusDiv.innerText = "Поиск пути (через TURN)...";
+            isConnecting = true;
+            callBtn.disabled = true; // Блокируем кнопку визуально
+            statusDiv.innerText = "Поиск пути...";
+
+            // Инициализация звонка
             const call = peer.call(remoteId, localStream);
             handleCall(call);
 
+            // Инициализация чата
             const conn = peer.connect(remoteId);
             conn.on('open', () => setupDataConnection(conn));
+            
+            // Сброс флага через 5 секунд, если ничего не произошло
+            setTimeout(() => { isConnecting = false; }, 5000);
         };
 
         function handleCall(call) {
@@ -401,11 +424,20 @@
             
             call.on('stream', remoteStream => {
                 remoteVideo.srcObject = remoteStream;
-                remoteVideo.play().catch(e => console.error(e));
+                // Безопасный запуск видео
+                remoteVideo.play().catch(e => {
+                    console.warn("Video play error:", e);
+                    // Иногда нужно взаимодействие пользователя для запуска звука
+                });
                 statusDiv.innerText = "Звонок идет";
+                isConnecting = false;
             });
 
-            call.on('close', resetUI);
+            call.on('close', () => {
+                console.log("Call closed");
+                resetUI();
+            });
+
             call.on('error', (err) => {
                 console.error(err);
                 statusDiv.innerText = "Ошибка соединения";
@@ -463,12 +495,25 @@
         }
 
         function setupDataConnection(conn) {
+            // Если уже есть активное соединение, не создаем новое
+            if (dataConnection && dataConnection.open) {
+                conn.close();
+                return;
+            }
+            
             dataConnection = conn;
             chatInput.disabled = false;
             sendChatBtn.disabled = false;
             addMessage("Система", "Чат подключен", "received");
+            
             dataConnection.on('data', data => {
                 addMessage("Собеседник", data, "received");
+            });
+
+            dataConnection.on('close', () => {
+                chatInput.disabled = true;
+                sendChatBtn.disabled = true;
+                addMessage("Система", "Чат отключен", "received");
             });
         }
 
@@ -517,6 +562,8 @@
             chatInput.disabled = true;
             sendChatBtn.disabled = true;
             statusDiv.innerText = "Звонок завершен";
+            isConnecting = false;
+            
             if (isScreenSharing) stopScreenShare();
             currentCall = null;
             dataConnection = null;
@@ -525,6 +572,8 @@
         peer.on('error', err => {
             console.error(err);
             statusDiv.innerText = "Ошибка: " + err.type;
+            isConnecting = false;
+            callBtn.disabled = false;
         });
     </script>
 </body>
