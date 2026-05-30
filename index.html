@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Video Call</title>
+    <!-- Подключаем PeerJS -->
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #f4f4f4;
+            --text-color: #333;
+            --accent-color: #000;
+            --button-hover: #333;
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 1200px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        video {
+            width: 100%;
+            height: auto;
+            background: #000;
+            border: 1px solid #ccc;
+            aspect-ratio: 16/9;
+        }
+
+        .controls {
+            grid-column: 1 / -1;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 20px;
+            padding: 20px;
+            background: #fff;
+            border: 1px solid #ddd;
+        }
+
+        input {
+            padding: 10px;
+            border: 1px solid #ccc;
+            font-size: 16px;
+            min-width: 250px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: var(--accent-color);
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        button:hover {
+            background-color: var(--button-hover);
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .status {
+            grid-column: 1 / -1;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        /* Адаптив для мобильных */
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="status" id="status">Инициализация...</div>
+
+    <div class="container">
+        <div>
+            <h3>Ваше видео</h3>
+            <video id="localVideo" autoplay muted playsinline></video>
+        </div>
+        <div>
+            <h3>Собеседник</h3>
+            <video id="remoteVideo" autoplay playsinline></video>
+        </div>
+
+        <div class="controls">
+            <div id="myIdDisplay">Ваш ID: <b>...</b></div>
+            <input type="text" id="remoteIdInput" placeholder="Введите ID собеседника">
+            <button id="callBtn">Позвонить</button>
+            <button id="hangupBtn" disabled>Завершить</button>
+        </div>
+    </div>
+
+    <script>
+        // Инициализация PeerJS
+        const peer = new Peer(null, {
+            debug: 2
+        });
+
+        const localVideo = document.getElementById('localVideo');
+        const remoteVideo = document.getElementById('remoteVideo');
+        const statusDiv = document.getElementById('status');
+        const myIdDisplay = document.querySelector('#myIdDisplay b');
+        const callBtn = document.getElementById('callBtn');
+        const hangupBtn = document.getElementById('hangupBtn');
+        const remoteIdInput = document.getElementById('remoteIdInput');
+
+        let localStream;
+        let currentCall;
+
+        // Получение доступа к камере и микрофону
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+            .then(stream => {
+                localStream = stream;
+                localVideo.srcObject = stream;
+                statusDiv.innerText = "Готов к соединению. Камера активна.";
+            })
+            .catch(err => {
+                console.error("Ошибка доступа к медиа:", err);
+                statusDiv.innerText = "Ошибка: нет доступа к камере/микрофону.";
+            });
+
+        // Когда получаем свой ID от сервера PeerJS
+        peer.on('open', id => {
+            myIdDisplay.innerText = id;
+            statusDiv.innerText = "Ожидание звонка или ввод ID собеседника...";
+        });
+
+        // Обработка входящего звонка
+        peer.on('call', call => {
+            if (!confirm("Входящий звонок. Принять?")) { // Единственное подтверждение для безопасности
+                call.close();
+                return;
+            }
+            
+            answerCall(call);
+        });
+
+        // Кнопка "Позвонить"
+        callBtn.onclick = () => {
+            const remoteId = remoteIdInput.value.trim();
+            if (!remoteId) {
+                alert("Введите ID собеседника");
+                return;
+            }
+            const call = peer.call(remoteId, localStream);
+            handleCall(call);
+        };
+
+        // Кнопка "Завершить"
+        hangupBtn.onclick = () => {
+            if (currentCall) {
+                currentCall.close();
+            }
+            resetUI();
+        };
+
+        function answerCall(call) {
+            call.answer(localStream); // Отвечаем своим потоком
+            handleCall(call);
+        }
+
+        function handleCall(call) {
+            currentCall = call;
+            statusDiv.innerText = "Звонок идет...";
+            callBtn.disabled = true;
+            hangupBtn.disabled = false;
+
+            // Получение потока собеседника
+            call.on('stream', remoteStream => {
+                remoteVideo.srcObject = remoteStream;
+            });
+
+            call.on('close', () => {
+                resetUI();
+            });
+
+            call.on('error', err => {
+                console.error(err);
+                resetUI();
+                statusDiv.innerText = "Ошибка соединения.";
+            });
+        }
+
+        function resetUI() {
+            remoteVideo.srcObject = null;
+            callBtn.disabled = false;
+            hangupBtn.disabled = true;
+            statusDiv.innerText = "Звонок завершен. Ожидание...";
+            currentCall = null;
+        }
+
+        peer.on('error', err => {
+            console.error(err);
+            statusDiv.innerText = "Ошибка PeerJS: " + err.type;
+        });
+    </script>
+</body>
+</html>
