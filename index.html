@@ -3,15 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Secure Video Call</title>
-    <!-- Подключаем PeerJS -->
+    <title>Business Video Call</title>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <style>
         :root {
             --bg-color: #f4f4f4;
+            --panel-bg: #fff;
             --text-color: #333;
             --accent-color: #000;
-            --button-hover: #333;
+            --border-color: #ddd;
+            --chat-bg: #f9f9f9;
         }
 
         body {
@@ -22,204 +23,540 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
             height: 100vh;
+            overflow: hidden;
         }
 
-        .container {
-            width: 90%;
-            max-width: 1200px;
+        /* Основная сетка */
+        .main-layout {
+            display: flex;
+            width: 100%;
+            max-width: 1400px;
+            height: 85vh;
+            padding: 20px;
+            gap: 20px;
+            box-sizing: border-box;
+        }
+
+        /* Видео секция */
+        .video-section {
+            flex: 3;
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 20px;
+            grid-template-rows: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .video-wrapper {
+            position: relative;
+            background: #000;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Основное большое видео (собеседник или экран) */
+        .video-wrapper.main {
+            grid-column: 1 / -1;
+            grid-row: 1 / 2;
+        }
+
+        /* Маленькое видео (себя) */
+        .video-wrapper.self {
+            grid-column: 1 / 2;
+            grid-row: 2 / 3;
+        }
+
+        /* Пустой слот для баланса или будущего использования */
+        .video-wrapper.placeholder {
+            grid-column: 2 / 3;
+            grid-row: 2 / 3;
+            background: #e0e0e0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #888;
         }
 
         video {
             width: 100%;
-            height: auto;
-            background: #000;
-            border: 1px solid #ccc;
-            aspect-ratio: 16/9;
+            height: 100%;
+            object-fit: contain;
         }
 
-        .controls {
-            grid-column: 1 / -1;
+        #localVideo {
+            transform: scaleX(-1); /* Зеркалим себя */
+        }
+
+        .label {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 4px 8px;
+            font-size: 12px;
+            border-radius: 4px;
+            pointer-events: none;
+        }
+
+        /* Чат секция */
+        .chat-section {
+            flex: 1;
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            min-width: 300px;
+        }
+
+        .chat-header {
+            padding: 15px;
+            border-bottom: 1px solid var(--border-color);
+            font-weight: bold;
+            background: #fafafa;
+        }
+
+        .chat-messages {
+            flex-grow: 1;
+            padding: 15px;
+            overflow-y: auto;
+            background: var(--chat-bg);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .message {
+            max-width: 80%;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            line-height: 1.4;
+            word-wrap: break-word;
+        }
+
+        .message.sent {
+            align-self: flex-end;
+            background: #000;
+            color: #fff;
+        }
+
+        .message.received {
+            align-self: flex-start;
+            background: #e0e0e0;
+            color: #000;
+        }
+
+        .chat-input-area {
+            padding: 15px;
+            border-top: 1px solid var(--border-color);
             display: flex;
             gap: 10px;
-            justify-content: center;
-            margin-top: 20px;
-            padding: 20px;
-            background: #fff;
-            border: 1px solid #ddd;
         }
 
-        input {
-            padding: 10px;
+        .chat-input-area input {
+            flex-grow: 1;
+            padding: 8px;
             border: 1px solid #ccc;
-            font-size: 16px;
-            min-width: 250px;
+            border-radius: 4px;
         }
 
-        button {
+        .chat-input-area button {
+            padding: 8px 15px;
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        /* Панель управления */
+        .controls-bar {
+            width: 100%;
+            max-width: 1400px;
+            padding: 15px 20px;
+            background: var(--panel-bg);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-sizing: border-box;
+        }
+
+        .id-block {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+        }
+
+        .copy-id-btn {
+            background: none;
+            border: 1px solid #ccc;
+            padding: 5px 10px;
+            cursor: pointer;
+            font-size: 12px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .copy-id-btn:hover {
+            background: #eee;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
             padding: 10px 20px;
-            background-color: var(--accent-color);
-            color: #fff;
             border: none;
             cursor: pointer;
-            font-size: 16px;
+            font-size: 14px;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 0.5px;
+            border-radius: 4px;
+            transition: background 0.2s;
         }
 
-        button:hover {
-            background-color: var(--button-hover);
-        }
+        .btn-primary { background: var(--accent-color); color: white; }
+        .btn-primary:hover { background: #333; }
+        
+        .btn-secondary { background: #fff; border: 1px solid #ccc; color: #333; }
+        .btn-secondary:hover { background: #f0f0f0; }
+        
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-danger:hover { background: #c82333; }
 
-        button:disabled {
-            background-color: #ccc;
+        .btn:disabled {
+            opacity: 0.5;
             cursor: not-allowed;
         }
 
-        .status {
-            grid-column: 1 / -1;
-            text-align: center;
-            margin-bottom: 10px;
-            font-size: 14px;
-            color: #666;
+        .status-msg {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255,255,255,0.9);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            border: 1px solid #ddd;
+            z-index: 100;
         }
 
-        /* Адаптив для мобильных */
-        @media (max-width: 768px) {
-            .container {
-                grid-template-columns: 1fr;
-            }
+        @media (max-width: 900px) {
+            .main-layout { flex-direction: column; height: auto; }
+            .video-section { grid-template-columns: 1fr; grid-template-rows: auto auto; }
+            .video-wrapper.main { grid-column: 1; grid-row: 1; height: 300px; }
+            .video-wrapper.self { grid-column: 1; grid-row: 2; height: 200px; }
+            .video-wrapper.placeholder { display: none; }
+            .chat-section { height: 300px; }
         }
     </style>
 </head>
 <body>
 
-    <div class="status" id="status">Инициализация...</div>
+    <div class="status-msg" id="status">Инициализация...</div>
 
-    <div class="container">
-        <div>
-            <h3>Ваше видео</h3>
-            <video id="localVideo" autoplay muted playsinline></video>
-        </div>
-        <div>
-            <h3>Собеседник</h3>
-            <video id="remoteVideo" autoplay playsinline></video>
+    <div class="main-layout">
+        <!-- Видео зона -->
+        <div class="video-section">
+            <div class="video-wrapper main">
+                <video id="remoteVideo" autoplay playsinline></video>
+                <div class="label" id="remoteLabel">Ожидание...</div>
+            </div>
+            <div class="video-wrapper self">
+                <video id="localVideo" autoplay muted playsinline></video>
+                <div class="label">Вы</div>
+            </div>
+            <div class="video-wrapper placeholder">
+                <span>Статус соединения</span>
+            </div>
         </div>
 
-        <div class="controls">
-            <div id="myIdDisplay">Ваш ID: <b>...</b></div>
-            <input type="text" id="remoteIdInput" placeholder="Введите ID собеседника">
-            <button id="callBtn">Позвонить</button>
-            <button id="hangupBtn" disabled>Завершить</button>
+        <!-- Чат зона -->
+        <div class="chat-section">
+            <div class="chat-header">Чат</div>
+            <div class="chat-messages" id="chatMessages">
+                <div style="color: #999; font-size: 12px; text-align: center;">Сообщения появятся после начала звонка</div>
+            </div>
+            <div class="chat-input-area">
+                <input type="text" id="chatInput" placeholder="Введите сообщение..." disabled>
+                <button id="sendChatBtn" disabled>Отпр.</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Панель управления -->
+    <div class="controls-bar">
+        <div class="id-block">
+            <span>Ваш ID:</span>
+            <b id="myIdDisplay" style="cursor: pointer; border-bottom: 1px dashed #999;" title="Нажмите, чтобы скопировать">...</b>
+            <button class="copy-id-btn" id="copyIdBtn">Копировать</button>
+        </div>
+
+        <div class="actions">
+            <input type="text" id="remoteIdInput" placeholder="ID собеседника" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+            <button id="callBtn" class="btn btn-primary">Позвонить</button>
+            <button id="screenShareBtn" class="btn btn-secondary" disabled>Демонстрация экрана</button>
+            <button id="hangupBtn" class="btn btn-danger" disabled>Завершить</button>
         </div>
     </div>
 
     <script>
-        // Инициализация PeerJS
-        const peer = new Peer(null, {
-            debug: 2
-        });
-
+        // --- Инициализация ---
+        const peer = new Peer(null, { debug: 2 });
         const localVideo = document.getElementById('localVideo');
         const remoteVideo = document.getElementById('remoteVideo');
         const statusDiv = document.getElementById('status');
-        const myIdDisplay = document.querySelector('#myIdDisplay b');
+        const myIdDisplay = document.getElementById('myIdDisplay');
+        const remoteLabel = document.getElementById('remoteLabel');
+        
+        // Элементы управления
         const callBtn = document.getElementById('callBtn');
         const hangupBtn = document.getElementById('hangupBtn');
+        const screenShareBtn = document.getElementById('screenShareBtn');
         const remoteIdInput = document.getElementById('remoteIdInput');
+        const copyIdBtn = document.getElementById('copyIdBtn');
+
+        // Чат элементы
+        const chatMessages = document.getElementById('chatMessages');
+        const chatInput = document.getElementById('chatInput');
+        const sendChatBtn = document.getElementById('sendChatBtn');
 
         let localStream;
         let currentCall;
+        let dataConnection; // Для чата
+        let isScreenSharing = false;
 
-        // Получение доступа к камере и микрофону
-        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-            .then(stream => {
+        // --- 1. Получение камеры ---
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 localStream = stream;
                 localVideo.srcObject = stream;
-                statusDiv.innerText = "Готов к соединению. Камера активна.";
-            })
-            .catch(err => {
-                console.error("Ошибка доступа к медиа:", err);
-                statusDiv.innerText = "Ошибка: нет доступа к камере/микрофону.";
-            });
+                statusDiv.innerText = "Камера активна. Введите ID для звонка.";
+            } catch (err) {
+                console.error(err);
+                statusDiv.innerText = "Ошибка доступа к камере.";
+            }
+        }
+        startCamera();
 
-        // Когда получаем свой ID от сервера PeerJS
+        // --- 2. PeerJS события ---
         peer.on('open', id => {
             myIdDisplay.innerText = id;
-            statusDiv.innerText = "Ожидание звонка или ввод ID собеседника...";
         });
 
-        // Обработка входящего звонка
+        // Входящий звонок
         peer.on('call', call => {
-            if (!confirm("Входящий звонок. Принять?")) { // Единственное подтверждение для безопасности
-                call.close();
-                return;
+            if (confirm("Входящий звонок. Принять?")) {
+                call.answer(localStream);
+                handleCall(call);
+                
+                // Ожидаем соединение для чата
+                peer.on('connection', conn => {
+                    setupDataConnection(conn);
+                });
             }
-            
-            answerCall(call);
         });
 
-        // Кнопка "Позвонить"
+        // Входящее соединение данных (чат)
+        peer.on('connection', conn => {
+            if (currentCall) {
+                setupDataConnection(conn);
+            } else {
+                // Если звонок еще не начался, сохраняем соединение или игнорируем
+                // В простой реализации чат работает только во время звонка
+                conn.on('open', () => {
+                    conn.send("Привет! Готов к звонку?");
+                });
+            }
+        });
+
+        // --- 3. Логика звонка ---
         callBtn.onclick = () => {
             const remoteId = remoteIdInput.value.trim();
-            if (!remoteId) {
-                alert("Введите ID собеседника");
-                return;
-            }
+            if (!remoteId) return alert("Введите ID");
+            
+            statusDiv.innerText = "Звоним...";
             const call = peer.call(remoteId, localStream);
             handleCall(call);
-        };
 
-        // Кнопка "Завершить"
-        hangupBtn.onclick = () => {
-            if (currentCall) {
-                currentCall.close();
-            }
-            resetUI();
+            // Открываем соединение для чата
+            const conn = peer.connect(remoteId);
+            conn.on('open', () => {
+                setupDataConnection(conn);
+            });
         };
-
-        function answerCall(call) {
-            call.answer(localStream); // Отвечаем своим потоком
-            handleCall(call);
-        }
 
         function handleCall(call) {
             currentCall = call;
-            statusDiv.innerText = "Звонок идет...";
             callBtn.disabled = true;
             hangupBtn.disabled = false;
-
-            // Получение потока собеседника
+            screenShareBtn.disabled = false;
+            remoteLabel.innerText = "Собеседник";
+            
             call.on('stream', remoteStream => {
                 remoteVideo.srcObject = remoteStream;
+                remoteVideo.play().catch(e => console.error(e));
+                statusDiv.innerText = "Звонок идет";
             });
 
-            call.on('close', () => {
-                resetUI();
+            call.on('close', resetUI);
+            call.on('error', resetUI);
+        }
+
+        // --- 4. Демонстрация экрана ---
+        screenShareBtn.onclick = async () => {
+            if (!currentCall) return;
+
+            if (!isScreenSharing) {
+                try {
+                    const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                    
+                    // Заменяем видеотрек в звонке
+                    const videoTrack = screenStream.getVideoTracks()[0];
+                    const sender = currentCall.peerConnection.getSenders().find(s => s.track.kind === videoTrack.kind);
+                    sender.replaceTrack(videoTrack);
+
+                    // Показываем экран у себя локально
+                    localVideo.srcObject = screenStream;
+                    localVideo.style.transform = "none"; // Убираем зеркало для экрана
+                    
+                    isScreenSharing = true;
+                    screenShareBtn.innerText = "Остановить демонстрацию";
+                    screenShareBtn.classList.add("btn-danger");
+                    screenShareBtn.classList.remove("btn-secondary");
+
+                    // Если пользователь нажал "Остановить" в браузере
+                    videoTrack.onended = () => stopScreenShare();
+
+                } catch (err) {
+                    console.error("Ошибка шаринга:", err);
+                }
+            } else {
+                stopScreenShare();
+            }
+        };
+
+        async function stopScreenShare() {
+            if (!currentCall) return;
+            
+            try {
+                // Возвращаем камеру
+                const cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                const videoTrack = cameraStream.getVideoTracks()[0];
+                const sender = currentCall.peerConnection.getSenders().find(s => s.track.kind === videoTrack.kind);
+                sender.replaceTrack(videoTrack);
+
+                // Обновляем локальное видео (оставляем аудио от оригинального стрима)
+                const originalAudioTrack = localStream.getAudioTracks()[0];
+                cameraStream.addTrack(originalAudioTrack);
+                localStream = cameraStream; // Обновляем ссылку
+                
+                localVideo.srcObject = cameraStream;
+                localVideo.style.transform = "scaleX(-1)"; // Возвращаем зеркало
+
+                isScreenSharing = false;
+                screenShareBtn.innerText = "Демонстрация экрана";
+                screenShareBtn.classList.remove("btn-danger");
+                screenShareBtn.classList.add("btn-secondary");
+            } catch (err) {
+                console.error("Ошибка возврата камеры:", err);
+            }
+        }
+
+        // --- 5. Чат ---
+        function setupDataConnection(conn) {
+            dataConnection = conn;
+            chatInput.disabled = false;
+            sendChatBtn.disabled = false;
+            addMessage("Система", "Чат подключен", "received");
+
+            dataConnection.on('data', data => {
+                addMessage("Собеседник", data, "received");
             });
 
-            call.on('error', err => {
-                console.error(err);
-                resetUI();
-                statusDiv.innerText = "Ошибка соединения.";
+            dataConnection.on('close', () => {
+                chatInput.disabled = true;
+                sendChatBtn.disabled = true;
+                addMessage("Система", "Чат отключен", "received");
             });
         }
+
+        sendChatBtn.onclick = sendMessage;
+        chatInput.addEventListener('keypress', e => {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        function sendMessage() {
+            const text = chatInput.value.trim();
+            if (!text || !dataConnection) return;
+
+            dataConnection.send(text);
+            addMessage("Вы", text, "sent");
+            chatInput.value = '';
+        }
+
+        function addMessage(sender, text, type) {
+            const div = document.createElement('div');
+            div.className = `message ${type}`;
+            div.innerHTML = `<strong>${sender}:</strong> ${text}`;
+            chatMessages.appendChild(div);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // --- 6. Утилиты ---
+        // Копирование ID
+        copyIdBtn.onclick = () => {
+            const id = myIdDisplay.innerText;
+            navigator.clipboard.writeText(id).then(() => {
+                const originalText = copyIdBtn.innerText;
+                copyIdBtn.innerText = "Скопировано!";
+                setTimeout(() => copyIdBtn.innerText = originalText, 2000);
+            });
+        };
+
+        // Клик по самому ID тоже копирует
+        myIdDisplay.onclick = () => copyIdBtn.click();
+
+        hangupBtn.onclick = () => {
+            if (currentCall) currentCall.close();
+            if (dataConnection) dataConnection.close();
+            resetUI();
+        };
 
         function resetUI() {
             remoteVideo.srcObject = null;
             callBtn.disabled = false;
             hangupBtn.disabled = true;
-            statusDiv.innerText = "Звонок завершен. Ожидание...";
+            screenShareBtn.disabled = true;
+            chatInput.disabled = true;
+            sendChatBtn.disabled = true;
+            statusDiv.innerText = "Звонок завершен";
+            remoteLabel.innerText = "Ожидание...";
             currentCall = null;
+            dataConnection = null;
+            
+            // Сброс шаринга если был
+            if (isScreenSharing) {
+                isScreenSharing = false;
+                screenShareBtn.innerText = "Демонстрация экрана";
+                screenShareBtn.classList.remove("btn-danger");
+                screenShareBtn.classList.add("btn-secondary");
+            }
         }
 
         peer.on('error', err => {
             console.error(err);
-            statusDiv.innerText = "Ошибка PeerJS: " + err.type;
+            statusDiv.innerText = "Ошибка: " + err.type;
         });
     </script>
 </body>
