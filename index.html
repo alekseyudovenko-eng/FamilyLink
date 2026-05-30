@@ -26,14 +26,12 @@
             overflow: hidden;
         }
 
-        /* Основная рабочая область */
         .workspace {
             display: flex;
             flex: 1;
             overflow: hidden;
         }
 
-        /* Левая часть: Видео */
         .video-container {
             flex: 3;
             position: relative;
@@ -50,12 +48,11 @@
             object-fit: contain;
         }
 
-        /* Малое окно (Picture-in-Picture) */
         .pip-window {
             position: absolute;
             bottom: 20px;
             right: 20px;
-            width: 25%; /* Примерно 1/9 площади при соотношении 16:9 */
+            width: 25%;
             max-width: 320px;
             min-width: 160px;
             aspect-ratio: 16/9;
@@ -70,7 +67,7 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-            transform: scaleX(-1); /* Зеркалим себя */
+            transform: scaleX(-1);
         }
 
         .pip-label {
@@ -85,7 +82,6 @@
             pointer-events: none;
         }
 
-        /* Правая часть: Чат */
         .chat-container {
             flex: 1;
             min-width: 300px;
@@ -156,7 +152,6 @@
             cursor: pointer;
         }
 
-        /* Нижняя панель управления */
         .control-panel {
             height: 60px;
             background: var(--panel-bg);
@@ -247,7 +242,6 @@
             pointer-events: none;
         }
 
-        /* Адаптив для мобильных */
         @media (max-width: 768px) {
             .workspace { flex-direction: column; }
             .chat-container { height: 30%; min-width: 100%; max-width: 100%; border-left: none; border-top: 1px solid #ccc; }
@@ -260,21 +254,15 @@
 <body>
 
     <div class="workspace">
-        <!-- Видео зона -->
         <div class="video-container">
             <div class="status-indicator" id="status">Инициализация...</div>
-            
-            <!-- Большое видео (Собеседник) -->
             <video id="remoteVideo" autoplay playsinline></video>
-
-            <!-- Малое видео (Вы) -->
             <div class="pip-window">
                 <video id="localVideo" autoplay muted playsinline></video>
                 <div class="pip-label">Вы</div>
             </div>
         </div>
 
-        <!-- Чат зона -->
         <div class="chat-container">
             <div class="chat-header">Сообщения</div>
             <div class="chat-messages" id="chatMessages">
@@ -289,7 +277,6 @@
         </div>
     </div>
 
-    <!-- Панель управления -->
     <div class="control-panel">
         <div class="id-section">
             <span style="font-size: 12px; color: #666;">Ваш ID:</span>
@@ -303,24 +290,40 @@
             <button id="hangupBtn" class="btn btn-danger" disabled>Стоп</button>
         </div>
         
-        <div style="width: 100px;"></div> <!-- Пустой блок для баланса центровки -->
+        <div style="width: 100px;"></div>
     </div>
 
     <script>
-        // --- Инициализация ---
-        const peer = new Peer(null, { debug: 2 });
+        // --- КОНФИГУРАЦИЯ STUN/TURN СЕРВЕРОВ ---
+        // Это критически важно для работы через NAT и в России
+        const peerConfig = {
+            debug: 2,
+            config: {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun.cloudflare.com:3478' },
+                    { urls: 'stun:stun.voip.blackberry.com:3478' },
+                    { urls: 'stun:stun.nextcloud.com:443' },
+                    { urls: 'stun:stun.sipgate.net:10060' },
+                    // Если есть доступ к бесплатным TURN (можно добавить сюда)
+                ],
+                iceCandidatePoolSize: 10
+            }
+        };
+
+        const peer = new Peer(null, peerConfig);
+        
         const localVideo = document.getElementById('localVideo');
         const remoteVideo = document.getElementById('remoteVideo');
         const statusDiv = document.getElementById('status');
         const myIdBtn = document.getElementById('myIdBtn');
         
-        // Управление
         const callBtn = document.getElementById('callBtn');
         const hangupBtn = document.getElementById('hangupBtn');
         const screenShareBtn = document.getElementById('screenShareBtn');
         const remoteIdInput = document.getElementById('remoteIdInput');
 
-        // Чат
         const chatMessages = document.getElementById('chatMessages');
         const chatInput = document.getElementById('chatInput');
         const sendChatBtn = document.getElementById('sendChatBtn');
@@ -330,10 +333,12 @@
         let dataConnection;
         let isScreenSharing = false;
 
-        // --- 1. Камера ---
         async function startCamera() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: { ideal: 1280 }, height: { ideal: 720 } }, 
+                    audio: true 
+                });
                 localStream = stream;
                 localVideo.srcObject = stream;
                 statusDiv.innerText = "Готов к подключению";
@@ -345,13 +350,12 @@
         }
         startCamera();
 
-        // --- 2. PeerJS ---
         peer.on('open', id => {
             myIdBtn.innerText = id;
             myIdBtn.title = "Нажмите, чтобы скопировать: " + id;
+            console.log('My peer ID is: ' + id);
         });
 
-        // Входящий звонок
         peer.on('call', call => {
             if (confirm("Входящий звонок. Принять?")) {
                 call.answer(localStream);
@@ -359,19 +363,17 @@
             }
         });
 
-        // Входящее соединение данных
         peer.on('connection', conn => {
             if (currentCall || confirm("Разрешить чат с " + conn.peer + "?")) {
                 setupDataConnection(conn);
             }
         });
 
-        // --- 3. Логика звонка ---
         callBtn.onclick = () => {
             const remoteId = remoteIdInput.value.trim();
             if (!remoteId) return alert("Введите ID собеседника");
             
-            statusDiv.innerText = "Звоним...";
+            statusDiv.innerText = "Поиск пути к собеседнику...";
             const call = peer.call(remoteId, localStream);
             handleCall(call);
 
@@ -384,18 +386,22 @@
             callBtn.disabled = true;
             hangupBtn.disabled = false;
             screenShareBtn.disabled = false;
-            statusDiv.innerText = "Соединение установлено";
+            statusDiv.innerText = "Установка соединения...";
             
             call.on('stream', remoteStream => {
                 remoteVideo.srcObject = remoteStream;
                 remoteVideo.play().catch(e => console.error(e));
+                statusDiv.innerText = "Звонок идет";
             });
 
             call.on('close', resetUI);
-            call.on('error', resetUI);
+            call.on('error', (err) => {
+                console.error(err);
+                statusDiv.innerText = "Ошибка звонка";
+                resetUI();
+            });
         }
 
-        // --- 4. Демонстрация экрана ---
         screenShareBtn.onclick = async () => {
             if (!currentCall) return;
 
@@ -404,23 +410,23 @@
                     const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
                     const videoTrack = screenStream.getVideoTracks()[0];
                     
-                    // Замена трека в звонке
                     const sender = currentCall.peerConnection.getSenders().find(s => s.track.kind === videoTrack.kind);
-                    sender.replaceTrack(videoTrack);
+                    if (sender) {
+                        sender.replaceTrack(videoTrack);
+                        
+                        localVideo.srcObject = screenStream;
+                        localVideo.style.transform = "none";
+                        
+                        isScreenSharing = true;
+                        screenShareBtn.innerText = "Стоп экран";
+                        screenShareBtn.classList.add("btn-danger");
+                        screenShareBtn.classList.remove("btn-secondary");
 
-                    // Локальное отображение
-                    localVideo.srcObject = screenStream;
-                    localVideo.style.transform = "none"; // Убираем зеркало
-                    
-                    isScreenSharing = true;
-                    screenShareBtn.innerText = "Стоп экран";
-                    screenShareBtn.classList.add("btn-danger");
-                    screenShareBtn.classList.remove("btn-secondary");
-
-                    videoTrack.onended = stopScreenShare;
-
+                        videoTrack.onended = stopScreenShare;
+                    }
                 } catch (err) {
                     console.error("Ошибка:", err);
+                    statusDiv.innerText = "Ошибка демонстрации экрана";
                 }
             } else {
                 stopScreenShare();
@@ -433,26 +439,27 @@
                 const cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
                 const videoTrack = cameraStream.getVideoTracks()[0];
                 const sender = currentCall.peerConnection.getSenders().find(s => s.track.kind === videoTrack.kind);
-                sender.replaceTrack(videoTrack);
+                if (sender) {
+                    sender.replaceTrack(videoTrack);
 
-                // Возврат аудио
-                const originalAudioTrack = localStream.getAudioTracks()[0];
-                cameraStream.addTrack(originalAudioTrack);
-                localStream = cameraStream;
-                
-                localVideo.srcObject = cameraStream;
-                localVideo.style.transform = "scaleX(-1)"; // Возврат зеркала
+                    const originalAudioTrack = localStream.getAudioTracks()[0];
+                    cameraStream.addTrack(originalAudioTrack);
+                    localStream = cameraStream;
+                    
+                    localVideo.srcObject = cameraStream;
+                    localVideo.style.transform = "scaleX(-1)";
 
-                isScreenSharing = false;
-                screenShareBtn.innerText = "Экран";
-                screenShareBtn.classList.remove("btn-danger");
-                screenShareBtn.classList.add("btn-secondary");
+                    isScreenSharing = false;
+                    screenShareBtn.innerText = "Экран";
+                    screenShareBtn.classList.remove("btn-danger");
+                    screenShareBtn.classList.add("btn-secondary");
+                    statusDiv.innerText = "Звонок идет";
+                }
             } catch (err) {
                 console.error(err);
             }
         }
 
-        // --- 5. Чат ---
         function setupDataConnection(conn) {
             dataConnection = conn;
             chatInput.disabled = false;
@@ -462,6 +469,8 @@
             dataConnection.on('data', data => {
                 addMessage("Собеседник", data, "received");
             });
+            
+            dataConnection.on('error', err => console.error(err));
         }
 
         sendChatBtn.onclick = sendMessage;
@@ -485,9 +494,9 @@
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
-        // --- 6. Утилиты ---
         myIdBtn.onclick = () => {
             const id = myIdBtn.innerText;
+            if(id === "Загрузка...") return;
             navigator.clipboard.writeText(id).then(() => {
                 const original = myIdBtn.innerText;
                 myIdBtn.innerText = "Скопировано!";
@@ -518,6 +527,9 @@
         peer.on('error', err => {
             console.error(err);
             statusDiv.innerText = "Ошибка: " + err.type;
+            if(err.type === 'peer-unavailable') {
+                alert("Пользователь с таким ID не найден или оффлайн.");
+            }
         });
     </script>
 </body>
