@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Business Video Call (FFMUC)</title>
+    <title>Business Video Call</title>
     <link rel="icon" href="data:;base64,iVBORw0KGgo=">
-    <!-- Подключаем API Jitsi Meet (Сервер Мюнхен) -->
-    <script src='https://meet.ffmuc.net/external_api.js'></script>
+    <!-- Подключаем API основного сервера Jitsi -->
+    <script src='https://meet.jit.si/external_api.js'></script>
     <style>
         :root {
             --bg-color: #f4f4f4;
@@ -128,8 +128,8 @@
             roomName = generateRoomName();
             document.getElementById('roomIdDisplay').innerText = "ID: " + roomName;
 
-            // ИСПОЛЬЗУЕМ СЕРВЕР FFMUC (МЮНХЕН)
-            const domain = 'meet.ffmuc.net';
+            // Используем основной сервер, который разрешает встраивание
+            const domain = 'meet.jit.si';
             
             const options = {
                 roomName: roomName,
@@ -140,9 +140,13 @@
                 configOverwrite: {
                     startWithAudioMuted: false,
                     startWithVideoMuted: false,
-                    prejoinPageEnabled: false, // Сразу входим в звонок
-                    disableDeepLinking: true,
-                    useStunTurn: true,
+                    prejoinPageEnabled: false, // Отключаем предпросмотр
+                    disableDeepLinking: true,  // Не предлагаем приложение
+                    useStunTurn: true,         // Форсируем использование TURN
+                    enableLayerSuspension: false, // Улучшает качество
+                    startSilent: false,
+                    disableAP: true,           // Отключаем аналитику для скорости
+                    disableThirdPartyRequests: true
                 },
                 interfaceConfigOverwrite: {
                     SHOW_JITSI_WATERMARK: false,
@@ -177,7 +181,7 @@
         }
 
         document.getElementById('roomIdDisplay').onclick = function() {
-            const link = "https://meet.ffmuc.net/" + roomName;
+            const link = "https://meet.jit.si/" + roomName;
             navigator.clipboard.writeText(link).then(() => {
                 const original = this.innerText;
                 this.innerText = "Ссылка скопирована!";
