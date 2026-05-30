@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Video Call</title>
     <link rel="icon" href="data:;base64,iVBORw0KGgo=">
-    <!-- Подключаем Jitsi API -->
-    <script src='https://meet.ffmuc.net/external_api.js'></script>
+    <!-- Основной сервер Jitsi -->
+    <script src='https://meet.jit.si/external_api.js'></script>
     <style>
         body { margin: 0; font-family: Arial, sans-serif; background: #f4f4f4; display: flex; flex-direction: column; height: 100vh; }
         #jitsi-container { flex: 1; width: 100%; background: #000; }
@@ -32,15 +32,11 @@
     </div>
 
     <script>
-        // Используем стабильный сервер в Мюнхене
-        const domain = 'meet.ffmuc.net';
-        
-        // Генерируем случайное имя комнаты
+        const domain = 'meet.jit.si';
         const roomName = 'biz-call-' + Math.random().toString(36).substring(2, 10);
         
         document.getElementById('roomId').innerText = "ID: " + roomName;
         
-        // Копирование ссылки
         document.getElementById('roomId').onclick = function() {
             const link = "https://" + domain + "/" + roomName;
             navigator.clipboard.writeText(link);
@@ -56,7 +52,11 @@
             configOverwrite: { 
                 startWithAudioMuted: false, 
                 startWithVideoMuted: false,
-                prejoinPageEnabled: false // Сразу входим в звонок
+                prejoinPageEnabled: false,
+                // Оптимизация для сложных сетей
+                useStunTurn: true,
+                disableAP: true, // Отключаем лишние аналитики
+                disableThirdPartyRequests: true
             },
             interfaceConfigOverwrite: { 
                 SHOW_JITSI_WATERMARK: false, 
