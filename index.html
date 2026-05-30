@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Family Link Video</title>
+    <!-- Исправление favicon -->
+    <link rel="icon" href="data:;base64,iVBORw0KGgo=">
     <script src="https://cdn.jsdelivr.net/npm/livekit-client@1.15.0/dist/livekit-client.umd.min.js"></script>
     <style>
         body { margin: 0; font-family: Arial, sans-serif; background: #f4f4f4; display: flex; flex-direction: column; height: 100vh; }
@@ -27,9 +29,9 @@
     </div>
 
     <script>
-        const URL = 'wss://familylink-sfhuurtg.livekit.cloud';
+        // Переименовал URL в SERVER_URL, чтобы не было конфликта с браузером
+        const SERVER_URL = 'wss://familylink-sfhuurtg.livekit.cloud';
         
-        // Твой новый токен для комнаты test123
         const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE4MTE2ODM3MTgsImlkZW50aXR5IjoidXNlcjEiLCJpc3MiOiJBUElVYUFLZUFhVUc4a3ciLCJuYmYiOjE3ODAxNDc3MTgsInN1YiI6InVzZXIxIiwidmlkZW8iOnsiY2FuUHVibGlzaCI6dHJ1ZSwiY2FuUHVibGlzaERhdGEiOnRydWUsImNhblN1YnNjcmliZSI6dHJ1ZSwicm9vbSI6InRlc3QxMjMiLCJyb29tSm9pbiI6dHJ1ZX19.dFJFiX-pLjZbeDgiUKjuUyZCA8KIYZoEXaBtJ-1VOPo'; 
         
         let room;
@@ -37,6 +39,8 @@
         async function connect() {
             try {
                 document.getElementById('status').innerText = "Подключение...";
+                
+                // Используем LivekitClient.Room явно
                 room = new LivekitClient.Room();
                 
                 room.on(LivekitClient.RoomEvent.TrackSubscribed, (track) => {
@@ -48,7 +52,8 @@
                     }
                 });
 
-                await room.connect(URL, TOKEN);
+                // Передаем SERVER_URL
+                await room.connect(SERVER_URL, TOKEN);
                 
                 const tracks = await LivekitClient.createLocalTracks({ audio: true, video: true });
                 await room.localParticipant.publishTracks(tracks);
