@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Business Video Call</title>
+    <title>Business Video Call (8x8 JaaS)</title>
     <link rel="icon" href="data:;base64,iVBORw0KGgo=">
-    <!-- Подключаем API основного сервера Jitsi -->
-    <script src='https://meet.jit.si/external_api.js'></script>
+    <!-- Подключаем официальный SDK 8x8 -->
+    <script src="https://8x8.vc/libs/external_api.min.js"></script>
     <style>
         :root {
             --bg-color: #f4f4f4;
@@ -94,17 +94,13 @@
             font-size: 12px;
             z-index: 1000;
             pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.5s;
         }
-        
-        .visible { opacity: 1; }
     </style>
 </head>
 <body>
 
     <div class="workspace">
-        <div id="statusMsg" class="status-msg">Подключение...</div>
+        <div class="status-msg" id="statusMsg">Подключение к 8x8...</div>
         <div id="jitsi-container"></div>
     </div>
 
@@ -117,6 +113,14 @@
     </div>
 
     <script>
+        // ------------------------------------------------------------------
+        // ВАЖНО: ВСТАВЬТЕ СЮДА ВАШ APP ID ОТ 8x8 JaaS
+        // Пример: 'vpaas-magic-cookie-1234567890abcdef'
+        // Получить бесплатно: https://jaas.8x8.vc
+        // ------------------------------------------------------------------
+        const APP_ID = 'vpaas-magic-cookie-ed937926a1534c09a24d94d11c7bd415/9d63e5'; 
+        // ------------------------------------------------------------------
+
         let api = null;
         let roomName = '';
 
@@ -125,11 +129,17 @@
         }
 
         function initJitsi() {
+            if (APP_ID === 'ВСТАВЬТЕ_СЮДА_ВАШ_APP_ID' || APP_ID === '') {
+                document.getElementById('statusMsg').innerText = "Ошибка: Нет App ID!";
+                alert("Пожалуйста, получите бесплатный App ID на jaas.8x8.vc и вставьте его в код (строка 115).");
+                return;
+            }
+
             roomName = generateRoomName();
             document.getElementById('roomIdDisplay').innerText = "ID: " + roomName;
 
-            // Используем основной сервер, который разрешает встраивание
-            const domain = 'meet.jit.si';
+            // Формируем полный домен для вашего приложения
+            const domain = APP_ID + '.8x8.vc';
             
             const options = {
                 roomName: roomName,
@@ -140,13 +150,8 @@
                 configOverwrite: {
                     startWithAudioMuted: false,
                     startWithVideoMuted: false,
-                    prejoinPageEnabled: false, // Отключаем предпросмотр
-                    disableDeepLinking: true,  // Не предлагаем приложение
-                    useStunTurn: true,         // Форсируем использование TURN
-                    enableLayerSuspension: false, // Улучшает качество
-                    startSilent: false,
-                    disableAP: true,           // Отключаем аналитику для скорости
-                    disableThirdPartyRequests: true
+                    prejoinPageEnabled: false, // Сразу входим в звонок
+                    disableDeepLinking: true,
                 },
                 interfaceConfigOverwrite: {
                     SHOW_JITSI_WATERMARK: false,
@@ -156,7 +161,7 @@
                         'fullscreen', 'fodeviceselection', 'hangup', 'profile',
                         'chat', 'recording', 'livestreaming', 'etherpad', 
                         'settings', 'raisehand', 'videoquality', 'filmstrip',
-                        'feedback', 'stats', 'shortcuts', 'tileview', 'videobackgroundblur'
+                        'tileview', 'videobackgroundblur'
                     ],
                     DEFAULT_LOCAL_DISPLAY_NAME: 'Вы',
                     DEFAULT_REMOTE_DISPLAY_NAME: 'Собеседник'
@@ -168,20 +173,22 @@
 
                 api.addEventListeners({
                     videoConferenceJoined: () => {
-                        showStatus("Звонок начался");
+                        document.getElementById('statusMsg').innerText = "Звонок идет (8x8 JaaS)";
                     },
                     videoConferenceLeft: () => {
-                        showStatus("Звонок завершен");
+                        document.getElementById('statusMsg').innerText = "Звонок завершен";
                     }
                 });
             } catch (e) {
                 console.error(e);
-                showStatus("Ошибка загрузки сервиса");
+                document.getElementById('statusMsg').innerText = "Ошибка загрузки";
             }
         }
 
+        // Копирование ссылки
         document.getElementById('roomIdDisplay').onclick = function() {
-            const link = "https://meet.jit.si/" + roomName;
+            // Ссылка для 8x8 формируется особым образом
+            const link = "https://" + APP_ID + ".8x8.vc/" + roomName;
             navigator.clipboard.writeText(link).then(() => {
                 const original = this.innerText;
                 this.innerText = "Ссылка скопирована!";
@@ -193,18 +200,9 @@
             if (api) {
                 api.dispose();
                 api = null;
-                showStatus("Звонок завершен");
+                document.getElementById('statusMsg').innerText = "Звонок завершен";
                 setTimeout(() => location.reload(), 1500);
             }
-        }
-
-        function showStatus(text) {
-            const el = document.getElementById('statusMsg');
-            el.innerText = text;
-            el.classList.add('visible');
-            setTimeout(() => {
-                el.classList.remove('visible');
-            }, 3000);
         }
 
         window.onload = initJitsi;
