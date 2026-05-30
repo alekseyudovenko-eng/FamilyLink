@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Business Video Call</title>
+    <title>Business Video Call (RU Stable)</title>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <style>
         :root {
@@ -294,19 +294,33 @@
     </div>
 
     <script>
-        // --- КОНФИГУРАЦИЯ STUN/TURN СЕРВЕРОВ ---
-        // Это критически важно для работы через NAT и в России
+        // --- КОНФИГУРАЦИЯ С TURN-СЕРВЕРОМ ДЛЯ РОССИИ ---
         const peerConfig = {
             debug: 2,
             config: {
                 iceServers: [
+                    // STUN серверы (для определения IP)
                     { urls: 'stun:stun.l.google.com:19302' },
                     { urls: 'stun:stun1.l.google.com:19302' },
                     { urls: 'stun:stun.cloudflare.com:3478' },
-                    { urls: 'stun:stun.voip.blackberry.com:3478' },
-                    { urls: 'stun:stun.nextcloud.com:443' },
-                    { urls: 'stun:stun.sipgate.net:10060' },
-                    // Если есть доступ к бесплатным TURN (можно добавить сюда)
+                    
+                    // TURN серверы (для пробития NAT через релей)
+                    // Используем публичный тестовый сервер Metered.ca
+                    {
+                        urls: 'turn:openrelay.metered.ca:80',
+                        username: 'openrelayproject',
+                        credential: 'openrelayproject'
+                    },
+                    {
+                        urls: 'turn:openrelay.metered.ca:443',
+                        username: 'openrelayproject',
+                        credential: 'openrelayproject'
+                    },
+                    {
+                        urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+                        username: 'openrelayproject',
+                        credential: 'openrelayproject'
+                    }
                 ],
                 iceCandidatePoolSize: 10
             }
@@ -341,18 +355,17 @@
                 });
                 localStream = stream;
                 localVideo.srcObject = stream;
-                statusDiv.innerText = "Готов к подключению";
+                statusDiv.innerText = "Готов к подключению (TURN активен)";
             } catch (err) {
                 console.error(err);
                 statusDiv.innerText = "Ошибка камеры";
-                alert("Нет доступа к камере. Проверьте разрешения.");
+                alert("Нет доступа к камере.");
             }
         }
         startCamera();
 
         peer.on('open', id => {
             myIdBtn.innerText = id;
-            myIdBtn.title = "Нажмите, чтобы скопировать: " + id;
             console.log('My peer ID is: ' + id);
         });
 
@@ -364,16 +377,14 @@
         });
 
         peer.on('connection', conn => {
-            if (currentCall || confirm("Разрешить чат с " + conn.peer + "?")) {
-                setupDataConnection(conn);
-            }
+            setupDataConnection(conn);
         });
 
         callBtn.onclick = () => {
             const remoteId = remoteIdInput.value.trim();
             if (!remoteId) return alert("Введите ID собеседника");
             
-            statusDiv.innerText = "Поиск пути к собеседнику...";
+            statusDiv.innerText = "Поиск пути (через TURN)...";
             const call = peer.call(remoteId, localStream);
             handleCall(call);
 
@@ -386,7 +397,7 @@
             callBtn.disabled = true;
             hangupBtn.disabled = false;
             screenShareBtn.disabled = false;
-            statusDiv.innerText = "Установка соединения...";
+            statusDiv.innerText = "Соединение...";
             
             call.on('stream', remoteStream => {
                 remoteVideo.srcObject = remoteStream;
@@ -397,36 +408,30 @@
             call.on('close', resetUI);
             call.on('error', (err) => {
                 console.error(err);
-                statusDiv.innerText = "Ошибка звонка";
+                statusDiv.innerText = "Ошибка соединения";
                 resetUI();
             });
         }
 
         screenShareBtn.onclick = async () => {
             if (!currentCall) return;
-
             if (!isScreenSharing) {
                 try {
                     const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
                     const videoTrack = screenStream.getVideoTracks()[0];
-                    
                     const sender = currentCall.peerConnection.getSenders().find(s => s.track.kind === videoTrack.kind);
                     if (sender) {
                         sender.replaceTrack(videoTrack);
-                        
                         localVideo.srcObject = screenStream;
                         localVideo.style.transform = "none";
-                        
                         isScreenSharing = true;
                         screenShareBtn.innerText = "Стоп экран";
                         screenShareBtn.classList.add("btn-danger");
                         screenShareBtn.classList.remove("btn-secondary");
-
                         videoTrack.onended = stopScreenShare;
                     }
                 } catch (err) {
-                    console.error("Ошибка:", err);
-                    statusDiv.innerText = "Ошибка демонстрации экрана";
+                    console.error(err);
                 }
             } else {
                 stopScreenShare();
@@ -441,14 +446,11 @@
                 const sender = currentCall.peerConnection.getSenders().find(s => s.track.kind === videoTrack.kind);
                 if (sender) {
                     sender.replaceTrack(videoTrack);
-
                     const originalAudioTrack = localStream.getAudioTracks()[0];
                     cameraStream.addTrack(originalAudioTrack);
                     localStream = cameraStream;
-                    
                     localVideo.srcObject = cameraStream;
                     localVideo.style.transform = "scaleX(-1)";
-
                     isScreenSharing = false;
                     screenShareBtn.innerText = "Экран";
                     screenShareBtn.classList.remove("btn-danger");
@@ -465,12 +467,9 @@
             chatInput.disabled = false;
             sendChatBtn.disabled = false;
             addMessage("Система", "Чат подключен", "received");
-
             dataConnection.on('data', data => {
                 addMessage("Собеседник", data, "received");
             });
-            
-            dataConnection.on('error', err => console.error(err));
         }
 
         sendChatBtn.onclick = sendMessage;
@@ -518,7 +517,6 @@
             chatInput.disabled = true;
             sendChatBtn.disabled = true;
             statusDiv.innerText = "Звонок завершен";
-            
             if (isScreenSharing) stopScreenShare();
             currentCall = null;
             dataConnection = null;
@@ -527,9 +525,6 @@
         peer.on('error', err => {
             console.error(err);
             statusDiv.innerText = "Ошибка: " + err.type;
-            if(err.type === 'peer-unavailable') {
-                alert("Пользователь с таким ID не найден или оффлайн.");
-            }
         });
     </script>
 </body>
