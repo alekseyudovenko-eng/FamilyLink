@@ -6,120 +6,62 @@
     <title>Family Link Video</title>
     <script src="https://cdn.jsdelivr.net/npm/livekit-client@1.15.0/dist/livekit-client.umd.min.js"></script>
     <style>
-        body { margin: 0; font-family: 'Helvetica Neue', Arial, sans-serif; background: #f4f4f4; display: flex; flex-direction: column; height: 100vh; }
-        .workspace { flex: 1; position: relative; background: #000; display: flex; justify-content: center; align-items: center; overflow: hidden; }
-        
-        #remoteVideoContainer { width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; color: #666; }
+        body { margin: 0; font-family: Arial, sans-serif; background: #f4f4f4; display: flex; flex-direction: column; height: 100vh; }
+        .workspace { flex: 1; position: relative; background: #000; display: flex; justify-content: center; align-items: center; }
+        #remoteVideoContainer { width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; color: #fff; }
         #remoteVideoContainer video { width: 100%; height: 100%; object-fit: contain; }
-        
-        .local-video {
-            position: absolute; bottom: 20px; right: 20px;
-            width: 25%; max-width: 240px; aspect-ratio: 16/9;
-            border: 2px solid rgba(255,255,255,0.5);
-            background: #222; transform: scaleX(-1);
-            z-index: 10;
-        }
-        
-        .controls {
-            height: 70px; background: #fff; border-top: 1px solid #ccc;
-            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 10px;
-        }
-        
-        .inputs { display: flex; gap: 10px; width: 100%; max-width: 800px; justify-content: center; }
-        input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; flex: 1; font-family: monospace; }
-        
-        button { padding: 8px 20px; cursor: pointer; border: none; border-radius: 4px; color: white; font-weight: bold; }
-        .btn-connect { background: #000; }
-        .btn-disconnect { background: #dc3545; }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        .status { 
-            position: absolute; top: 20px; left: 50%; transform: translateX(-50%); 
-            background: rgba(0,0,0,0.8); color: white; padding: 8px 15px; 
-            border-radius: 20px; font-size: 14px; z-index: 20; text-align: center;
-        }
+        .local-video { position: absolute; bottom: 20px; right: 20px; width: 25%; max-width: 240px; border: 2px solid white; transform: scaleX(-1); }
+        .controls { height: 60px; background: #fff; display: flex; align-items: center; justify-content: center; gap: 20px; }
+        button { padding: 10px 20px; cursor: pointer; background: #000; color: #fff; border: none; border-radius: 4px; }
+        .status { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); color: white; padding: 5px 15px; border-radius: 15px; }
     </style>
 </head>
 <body>
-
     <div class="workspace">
-        <div class="status" id="status">Готов к подключению</div>
-        <div id="remoteVideoContainer">Ожидание собеседника...</div>
+        <div class="status" id="status">Готов</div>
+        <div id="remoteVideoContainer">Нет видео</div>
         <video id="localVideo" class="local-video" autoplay muted playsinline></video>
     </div>
-
     <div class="controls">
-        <div class="inputs">
-            <!-- Ваш URL -->
-            <input type="text" id="urlInput" value="wss://familylink-sfhuurtg.livekit.cloud" readonly style="background: #eee;">
-            
-            <!-- Ваш Токен -->
-            <input type="text" id="tokenInput" value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODkxNDY5OTMsImlkZW50aXR5IjoidXNlcjEiLCJpc3MiOiJBUElVYUFLZUFhVUc4a3ciLCJuYmYiOjE3ODAxNDY5OTMsInN1YiI6InVzZXIxIiwidmlkZW8iOnsiY2FuUHVibGlzaCI6dHJ1ZSwiY2FuUHVibGlzaERhdGEiOnRydWUsImNhblN1YnNjcmliZSI6dHJ1ZSwicm9vbSI6Im15cm9vbSIsInJvb21Kb2luIjp0cnVlfX0.fMStaF834f-7tjNs6kzY44QvgZT2LUAmhe8k8zTvwJA" readonly style="background: #eee;">
-        </div>
-        <div>
-            <button class="btn-connect" id="connectBtn" onclick="connect()">Подключиться</button>
-            <button class="btn-disconnect" id="disconnectBtn" onclick="disconnect()" disabled>Отключиться</button>
-        </div>
+        <button onclick="connect()">Подключиться</button>
     </div>
 
     <script>
+        const URL = 'wss://familylink-sfhuurtg.livekit.cloud';
+        
+        // Твой новый токен для комнаты test123
+        const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE4MTE2ODM3MTgsImlkZW50aXR5IjoidXNlcjEiLCJpc3MiOiJBUElVYUFLZUFhVUc4a3ciLCJuYmYiOjE3ODAxNDc3MTgsInN1YiI6InVzZXIxIiwidmlkZW8iOnsiY2FuUHVibGlzaCI6dHJ1ZSwiY2FuUHVibGlzaERhdGEiOnRydWUsImNhblN1YnNjcmliZSI6dHJ1ZSwicm9vbSI6InRlc3QxMjMiLCJyb29tSm9pbiI6dHJ1ZX19.dFJFiX-pLjZbeDgiUKjuUyZCA8KIYZoEXaBtJ-1VOPo'; 
+        
         let room;
-        const ROOM_NAME = 'myroom'; 
 
         async function connect() {
-            const url = document.getElementById('urlInput').value.trim();
-            const token = document.getElementById('tokenInput').value.trim();
-            const statusDiv = document.getElementById('status');
-            const connectBtn = document.getElementById('connectBtn');
-            const disconnectBtn = document.getElementById('disconnectBtn');
-
             try {
-                statusDiv.innerText = "Подключение...";
-                connectBtn.disabled = true;
-
+                document.getElementById('status').innerText = "Подключение...";
                 room = new LivekitClient.Room();
-
+                
                 room.on(LivekitClient.RoomEvent.TrackSubscribed, (track) => {
                     if (track.kind === 'video') {
-                        const container = document.getElementById('remoteVideoContainer');
-                        container.innerHTML = ''; 
-                        const videoEl = track.attach();
-                        container.appendChild(videoEl);
-                        statusDiv.innerText = "Звонок идет";
+                        const el = track.attach();
+                        document.getElementById('remoteVideoContainer').innerHTML = '';
+                        document.getElementById('remoteVideoContainer').appendChild(el);
+                        document.getElementById('status').innerText = "Звонок идет";
                     }
                 });
 
-                room.on(LivekitClient.RoomEvent.Disconnected, () => {
-                    statusDiv.innerText = "Отключено";
-                    connectBtn.disabled = false;
-                    disconnectBtn.disabled = true;
-                });
-
-                await room.connect(url, token);
+                await room.connect(URL, TOKEN);
                 
                 const tracks = await LivekitClient.createLocalTracks({ audio: true, video: true });
                 await room.localParticipant.publishTracks(tracks);
                 
-                tracks.forEach(track => {
-                    if (track.kind === 'video') {
-                        document.getElementById('localVideo').srcObject = track.mediaStream;
-                    }
+                tracks.forEach(t => {
+                    if (t.kind === 'video') document.getElementById('localVideo').srcObject = t.mediaStream;
                 });
-
-                disconnectBtn.disabled = false;
-                statusDiv.innerText = "В комнате: " + ROOM_NAME;
-
-            } catch (err) {
-                console.error(err);
-                statusDiv.innerText = "Ошибка: " + err.message;
-                connectBtn.disabled = false;
-                alert("Ошибка подключения. Проверьте консоль.");
-            }
-        }
-
-        function disconnect() {
-            if (room) {
-                room.disconnect();
+                
+                document.getElementById('status').innerText = "Подключено к: " + room.name;
+            } catch (e) {
+                console.error(e);
+                document.getElementById('status').innerText = "Ошибка: " + e.message;
+                alert("Ошибка: " + e.message);
             }
         }
     </script>
