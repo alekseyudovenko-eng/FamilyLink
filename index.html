@@ -9,11 +9,9 @@
         body { margin: 0; font-family: 'Helvetica Neue', Arial, sans-serif; background: #f4f4f4; display: flex; flex-direction: column; height: 100vh; }
         .workspace { flex: 1; position: relative; background: #000; display: flex; justify-content: center; align-items: center; overflow: hidden; }
         
-        /* Видео собеседника */
         #remoteVideoContainer { width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; color: #666; }
         #remoteVideoContainer video { width: 100%; height: 100%; object-fit: contain; }
         
-        /* Ваше видео (PiP) */
         .local-video {
             position: absolute; bottom: 20px; right: 20px;
             width: 25%; max-width: 240px; aspect-ratio: 16/9;
@@ -53,21 +51,23 @@
 
     <div class="controls">
         <div class="inputs">
-            <!-- ВСТАВЬТЕ СВОЙ WSS URL НИЖЕ В VALUE -->
+            <!-- 1. ВСТАВЬТЕ СЮДА ВАШ WSS URL -->
             <input type="text" id="urlInput" placeholder="wss://..." value="wss://your-project.livekit.cloud">
             
-            <!-- ВСТАВЬТЕ СВОЙ ТОКЕН НИЖЕ В VALUE -->
+            <!-- 2. ВСТАВЬТЕ СЮДА ТОКЕН ДЛЯ КОМНАТЫ 'testroom' -->
             <input type="text" id="tokenInput" placeholder="Token..." value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
         </div>
         <div>
             <button class="btn-connect" id="connectBtn" onclick="connect()">Подключиться</button>
             <button class="btn-disconnect" id="disconnectBtn" onclick="disconnect()" disabled>Отключиться</button>
         </div>
-        <div style="font-size: 12px; color: #666;">Убедитесь, что URL начинается с wss://</div>
+        <div style="font-size: 12px; color: #666;">Комната жестко задана: testroom</div>
     </div>
 
     <script>
         let room;
+        // Имя комнаты жестко зафиксировано, чтобы избежать ошибок
+        const ROOM_NAME = 'testroom'; 
 
         async function connect() {
             const url = document.getElementById('urlInput').value.trim();
@@ -76,7 +76,6 @@
             const connectBtn = document.getElementById('connectBtn');
             const disconnectBtn = document.getElementById('disconnectBtn');
 
-            // Простая проверка формата
             if (!url.startsWith('wss://')) {
                 statusDiv.innerText = "Ошибка: URL должен начинаться с wss://";
                 statusDiv.classList.add('error');
@@ -84,21 +83,19 @@
             }
 
             try {
-                statusDiv.innerText = "Подключение...";
+                statusDiv.innerText = "Подключение к " + ROOM_NAME + "...";
                 statusDiv.classList.remove('error');
                 connectBtn.disabled = true;
 
-                // 1. Создаем комнату
                 room = new LivekitClient.Room();
 
-                // 2. Обработка видео собеседника
                 room.on(LivekitClient.RoomEvent.TrackSubscribed, (track) => {
                     if (track.kind === 'video') {
                         const container = document.getElementById('remoteVideoContainer');
                         container.innerHTML = ''; 
                         const videoEl = track.attach();
                         container.appendChild(videoEl);
-                        statusDiv.innerText = "Звонок идет";
+                        statusDiv.innerText = "Звонок идет (User: " + room.remoteParticipants.values().next().value?.identity + ")";
                     }
                 });
 
@@ -108,14 +105,13 @@
                     disconnectBtn.disabled = true;
                 });
 
-                // 3. Подключаемся
+                // Подключаемся. LiveKit сам проверит, совпадает ли комната в токене с ROOM_NAME
                 await room.connect(url, token);
                 
-                // 4. Публикуем свое видео
+                // Публикуем треки
                 const tracks = await LivekitClient.createLocalTracks({ audio: true, video: true });
                 await room.localParticipant.publishTracks(tracks);
                 
-                // Показываем себя
                 tracks.forEach(track => {
                     if (track.kind === 'video') {
                         document.getElementById('localVideo').srcObject = track.mediaStream;
@@ -123,7 +119,7 @@
                 });
 
                 disconnectBtn.disabled = false;
-                statusDiv.innerText = "В комнате: " + room.name;
+                statusDiv.innerText = "В комнате: " + ROOM_NAME;
 
             } catch (err) {
                 console.error(err);
@@ -131,11 +127,8 @@
                 statusDiv.classList.add('error');
                 connectBtn.disabled = false;
                 
-                // Подсказка по ошибке
-                if (err.message.includes('token')) {
-                    alert("Ошибка токена! \n1. Проверьте, что токен для комнаты 'testroom'.\n2. Проверьте, что он не истек.\n3. Убедитесь, что нет пробелов.");
-                } else if (err.message.includes('connection') || err.message.includes('network')) {
-                    alert("Ошибка сети! \nПроверьте, что URL правильный (wss://) и не заблокирован фаерволом.");
+                if (err.message.includes('Permission denied')) {
+                    alert("Ошибка доступа! \n\nПричина: Токен выдан для ДРУГОЙ комнаты.\n\nРешение:\n1. Создайте новый токен в консоли LiveKit.\n2. В поле Room Name напишите: testroom\n3. Скопируйте новый токен и вставьте его в код.");
                 }
             }
         }
